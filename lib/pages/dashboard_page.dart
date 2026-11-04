@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/produk.dart';
@@ -113,8 +112,8 @@ class _DashboardPageState extends State<DashboardPage> {
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [
-                  Color(0xFF1E3A8A),
-                  Color(0xFF3B82F6),
+                  Colors.pink,
+                  Colors.pinkAccent,
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -122,7 +121,7 @@ class _DashboardPageState extends State<DashboardPage> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.blue.withValues(alpha: 0.25),
+                  color: Colors.pink.withValues(alpha: 0.25),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -198,7 +197,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   child: FilterChip(
                     label: Text(_kategoriList[index]),
                     selected: isSelected,
-                    selectedColor: const Color(0xFF1E3A8A),
+                    selectedColor: Colors.pink,
                     labelStyle: TextStyle(
                       color: isSelected
                           ? Colors.white
@@ -362,7 +361,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                       Text(
                                         _formatRupiah(produk.harga),
                                         style: TextStyle(
-                                          color: Colors.blue.shade900,
+                                          color: Colors.pink.shade700,
                                           fontWeight: FontWeight.bold,
                                           fontSize: 13,
                                         ),
@@ -379,7 +378,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                           backgroundColor:
                                               produk.stok == 0
                                                   ? Colors.grey.shade300
-                                                  : const Color(0xFF1E3A8A),
+                                                  : Colors.pink,
                                           child: const Icon(
                                             Icons.add,
                                             color: Colors.white,

@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'main_navigation_page.dart';
@@ -50,7 +49,7 @@ class _SplashScreenPageState extends State<SplashScreenPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1E3A8A),
+      backgroundColor: Colors.pink,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -71,7 +70,7 @@ class _SplashScreenPageState extends State<SplashScreenPage> {
               child: const Icon(
                 Icons.point_of_sale_rounded,
                 size: 72,
-                color: Color(0xFF1E3A8A),
+                color: Colors.pink,
               ),
             ),
             const SizedBox(height: 24),
@@ -97,7 +96,7 @@ class _SplashScreenPageState extends State<SplashScreenPage> {
               width: 28,
               height: 28,
               child: CircularProgressIndicator(
-                color: Colors.amber,
+                color: Colors.white,
                 strokeWidth: 3,
               ),
             ),
@@ -114,7 +113,7 @@ class _SplashScreenPageState extends State<SplashScreenPage> {
               'Versi 1.0.0 — Modul Pertemuan 10',
               style: TextStyle(
                 fontSize: 11,
-                color: Colors.blue.shade200,
+                color: Colors.pink.shade100,
               ),
             ),
           ],

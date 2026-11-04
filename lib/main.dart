@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'pages/splash_screen_page.dart';
 
@@ -17,16 +16,17 @@ class SmartKasirApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.teal,
+          seedColor: Colors.pink,
           brightness: Brightness.light,
         ),
         appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 2,
-          backgroundColor: Color(0xFF1E3A8A),
+          backgroundColor: Colors.pink,
           foregroundColor: Colors.white,
         ),
       ),
+      // Mengarahkan aplikasi pertama kali ke SplashScreenPage
       home: const SplashScreenPage(),
     );
   }
