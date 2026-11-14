@@ -1,64 +1,126 @@
-// Mengimpor pustaka deteksi platform Flutter (untuk memeriksa peramban web kIsWeb)
+// Mengimpor pustaka dasar Flutter, SQLite, and path
 import 'package:flutter/foundation.dart';
-// Mengimpor pustaka inti SQLite untuk Flutter
-import 'package:sqflite/sqflite.dart';
-// Mengimpor pustaka penggabungan path direktori berkas lokal
 import 'package:path/path.dart';
-// Mengimpor implementasi SQLite FFI khusus peramban Web Google Chrome
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
-// Mengimpor model data produk
+
+// Mengimpor model data Produk dan Karyawan
 import '../models/produk.dart';
+import '../models/karyawan.dart';
 
-// Kelas pengelola koneksi dan operasi basis data SQLite lokal SmartKasir
+// Kelas Pengelola Basis Data Lokal SQLite (Pola Desain Singleton)
 class DatabaseHelper {
-  // --- 1. PENERAPAN DESIGN PATTERN SINGLETON ---
-  // Deklarasi instansi statis tunggal kelas DatabaseHelper yang diakses dari seluruh widget
+  // Instansiasi tunggal statis
   static final DatabaseHelper instance = DatabaseHelper._init();
-
-  // Variabel penampung objek koneksi database aktif (Nullable '?' sebelum diinisialisasi)
   static Database? _database;
 
-  // Konstruktor privat: Mengunci kelas agar tidak dapat diinstansiasi dengan 'DatabaseHelper()' secara bebas
   DatabaseHelper._init();
 
-  // --- 2. GETTER DATABASE ASINKRON ---
-  // Mengembalikan koneksi database aktif yang sudah ada, atau menginisialisasi baru jika belum pernah dibuka
+  // Getter pembuka koneksi database aktif
   Future<Database> get database async {
-    // KONTROL PERCABANGAN LOGIKA: Jika objek database sudah hidup di memori, langsung kembalikan
     if (_database != null) return _database!;
-
-    // Jika belum ada, inisialisasi berkas basis data baru
     _database = await _initDB('smartkasir.db');
+    await _seedIfNeeded(_database!);
+    await _normalisasiGambarProduk(_database!);
     return _database!;
   }
 
-  // --- 3. INISIALISASI BERKAS BASIS DATA (DUAL-PLATFORM CHROME & ANDROID) ---
-  Future<Database> _initDB(String filePath) async {
-    // KONTROL PERCABANGAN DUAL PLATFORM:
-    // Jika aplikasi berjalan di Google Chrome (Flutter Web), gunakan web database factory
-    if (kIsWeb) {
-      databaseFactory = databaseFactoryFfiWeb;
-      return await openDatabase(
-        filePath,
-        version: 1,
-        onCreate: _createDB, // Callback pembentukan tabel saat pertama kali dibuat
-      );
+  Future<void> _seedIfNeeded(Database db) async {
+    final produkRow = await db.rawQuery('SELECT COUNT(*) as count FROM produk');
+    final produkCount = (produkRow.first['count'] as int?) ?? 0;
+
+    if (produkCount == 0) {
+      for (final produk in produkAwalSQLite) {
+        await db.insert('produk', produk.toMap());
+      }
     }
 
-    // Jika berjalan di smartphone Android fisik / emulator:
-    final dbPath = await getDatabasesPath(); // Mengambil jalur folder basis data internal OS
-    final path = join(dbPath, filePath);     // Menggabungkan direktori dengan nama berkas 'smartkasir.db'
-
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: _createDB,
+    final karyawanRow = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM karyawan',
     );
+    final karyawanCount = (karyawanRow.first['count'] as int?) ?? 0;
+
+    if (karyawanCount == 0) {
+      await db.rawInsert('''
+        INSERT INTO karyawan (nama_karyawan, pin, peran)
+        VALUES ('Ahmad Kasir', '1234', 'Kasir')
+      ''');
+      await db.rawInsert('''
+        INSERT INTO karyawan (nama_karyawan, pin, peran)
+        VALUES ('Siti Supervisor', '8888', 'Manajer')
+      ''');
+    }
   }
 
-  // --- 4. DDL: PEMBUATAN STRUKTUR TABEL & SEEDING DATA AWAL ---
-  Future<void> _createDB(Database db, int version) async {
-    // Eksekusi kueri DDL CREATE TABLE produk di database SQLite
+  Future<void> _normalisasiGambarProduk(Database db) async {
+    final produkList = await db.query('produk');
+
+    for (final row in produkList) {
+      final nama = (row['nama_produk'] as String? ?? '').trim();
+      final lower = nama.toLowerCase();
+      String? gambarUrl;
+
+      if (lower.contains('kopi')) {
+        gambarUrl = 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=500';
+      } else if (lower.contains('roti') || lower.contains('bakar')) {
+        gambarUrl =
+            'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500';
+      } else if (lower.contains('matcha') || lower.contains('latte')) {
+        gambarUrl =
+            'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?w=500';
+      } else if (lower.contains('nasi') && lower.contains('goreng')) {
+        gambarUrl = 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=500';
+      } else if (lower.contains('keripik') || lower.contains('singkong')) {
+        gambarUrl = 'https://images.unsplash.com/photo-1740993384870-0793845268e6?w=800';
+      } else if (lower.contains('pisang') || lower.contains('goreng')) {
+        gambarUrl = 'https://images.unsplash.com/photo-1762941904142-9d91ca413e66?w=800';
+      }
+
+      if (gambarUrl != null) {
+        await db.update(
+          'produk',
+          {'gambar_path': gambarUrl},
+          where: 'id = ?',
+          whereArgs: [row['id']],
+        );
+      }
+    }
+  }
+
+  // Inisialisasi berkas basis data SQLite
+  Future<Database> _initDB(String filePath) async {
+    if (kIsWeb) {
+      databaseFactory = databaseFactoryFfiWeb;
+      return await databaseFactory.openDatabase(
+        filePath,
+        options: OpenDatabaseOptions(
+          version: 2,
+          onCreate: _createDB,
+          onUpgrade: _onUpgradeDB,
+        ),
+      );
+    } else {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+
+      final dbPath = await getDatabasesPath();
+      final path = join(dbPath, filePath);
+      return await openDatabase(
+        path,
+        version: 2,
+        onCreate: _createDB,
+        onUpgrade: _onUpgradeDB,
+      );
+    }
+  }
+
+  // DDL: Pembuatan Tabel Basis Data (Versi Baru)
+  Future _createDB(Database db, int version) async {
+    // HAPUS PAKSA TABEL LAMA AGAR CACHE BERSIH TOTAL DAN DATA TERBARU MASUK
+    await db.execute('DROP TABLE IF EXISTS produk');
+    await db.execute('DROP TABLE IF EXISTS karyawan');
+
+    // 1. Pembuatan Tabel Produk
     await db.execute('''
       CREATE TABLE produk (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,86 +136,149 @@ class DatabaseHelper {
       )
     ''');
 
-    // --- KONTROL PERULANGAN: SEEDING OTOMATIS DATA AWAL KE SQLITE ---
+    // 2. Pembuatan Tabel Karyawan
+    await db.execute('''
+      CREATE TABLE karyawan (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nama_karyawan TEXT NOT NULL,
+        pin TEXT NOT NULL,
+        peran TEXT NOT NULL
+      )
+    ''');
+
+    // 3. Memasukkan data produk awal otomatis (Seeding Data Awal Toko)
     for (final produk in produkAwalSQLite) {
       await db.insert('produk', produk.toMap());
     }
+
+    // 4. Memasukkan data staf awal otomatis
+    await db.rawInsert('''
+      INSERT INTO karyawan (nama_karyawan, pin, peran)
+      VALUES ('Ahmad Kasir', '1234', 'Kasir')
+    ''');
+    await db.rawInsert('''
+      INSERT INTO karyawan (nama_karyawan, pin, peran)
+      VALUES ('Siti Supervisor', '8888', 'Manajer')
+    ''');
   }
 
-  // --- 5. DML CREATE: MENAMBAHKAN PRODUK BARU KE SQLITE ---
-  Future<int> insertProduk(Produk produk) async {
-    final db = await instance.database; // Mengambil koneksi database aktif
-    // Mengeksekusi kueri INSERT dan mengembalikan auto-generated row ID
-    final id = await db.insert(
-      'produk',
-      produk.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace, // Jika kode produk duplikat, timpa data lama
+  // DDL: Migrasi Skema jika versi basis data ditingkatkan
+  Future _onUpgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS karyawan (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nama_karyawan TEXT NOT NULL,
+          pin TEXT NOT NULL,
+          peran TEXT NOT NULL
+        )
+      ''');
+
+      final existingProduk = await db.query('produk');
+      if (existingProduk.isEmpty) {
+        for (final produk in produkAwalSQLite) {
+          await db.insert('produk', produk.toMap());
+        }
+      }
+
+      final existingKaryawan = await db.query('karyawan');
+      if (existingKaryawan.isEmpty) {
+        await db.rawInsert('''
+          INSERT INTO karyawan (nama_karyawan, pin, peran)
+          VALUES ('Ahmad Kasir', '1234', 'Kasir')
+        ''');
+        await db.rawInsert('''
+          INSERT INTO karyawan (nama_karyawan, pin, peran)
+          VALUES ('Siti Supervisor', '8888', 'Manajer')
+        ''');
+      }
+    }
+  }
+
+  // ==========================================
+  // METODE CRUD: TABEL KARYAWAN
+  // ==========================================
+
+  // 1. CREATE: Menyimpan Karyawan Baru
+  Future<int> insertKaryawan(Karyawan karyawan) async {
+    final db = await instance.database;
+    return await db.insert('karyawan', karyawan.toMap());
+  }
+
+  // 2. READ: Mengambil Seluruh Karyawan
+  Future<List<Karyawan>> getAllKaryawan() async {
+    final db = await instance.database;
+    final result = await db.query('karyawan', orderBy: 'id ASC');
+    return result.map((json) => Karyawan.fromMap(json)).toList();
+  }
+
+  // 3. UPDATE: Memperbarui Data Karyawan
+  Future<int> updateKaryawan(Karyawan karyawan) async {
+    final db = await instance.database;
+    return await db.update(
+      'karyawan',
+      karyawan.toMap(),
+      where: 'id = ?',
+      whereArgs: [karyawan.id],
     );
-    return id;
   }
 
-  // --- 6. DML READ: MENGAMBIL SELURUH DAFTAR PRODUK (KATALOG UTAMA) ---
+  // 4. DELETE: Menghapus Karyawan Berdasarkan ID
+  Future<int> deleteKaryawan(int id) async {
+    final db = await instance.database;
+    return await db.delete('karyawan', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ==========================================
+  // METODE CRUD: TABEL PRODUK (DARI MINGGU 11)
+  // ==========================================
+
+  Future<int> insertProduk(Produk produk) async {
+    final db = await instance.database;
+    return await db.insert('produk', produk.toMap());
+  }
+
   Future<List<Produk>> getAllProduk() async {
     final db = await instance.database;
-    // Mengeksekusi kueri SELECT * FROM produk ORDER BY id DESC (Urutan produk terbaru di atas)
     final result = await db.query('produk', orderBy: 'id DESC');
-
-    // Mengonversi List of Map menjadi List of Produk menggunakan perulangan .map()
     return result.map((json) => Produk.fromMap(json)).toList();
   }
 
-  // --- 7. DML READ DENGAN FILTER KATEGORI: MENYARING PRODUK SESUAI CHIP ---
   Future<List<Produk>> getProdukByKategori(String kategori) async {
     final db = await instance.database;
-    // KONTROL PERCABANGAN LOGIKA: Jika kategori 'Semua', ambil seluruh data
-    if (kategori == 'Semua') {
-      return await getAllProduk();
-    }
-
-    // Eksekusi kueri berparameter aman dari SQL Injection menggunakan where & whereArgs
+    if (kategori == 'Semua') return await getAllProduk();
     final result = await db.query(
       'produk',
-      where: 'kategori = ?',       // Klausa kondisi penyaringan
-      whereArgs: [kategori],        // Argumen nilai parameter yang disubstitusikan ke '?'
-      orderBy: 'hargaJual ASC',     // <--- UBAH DARI 'id DESC' MENJADI INI
-    );
-
-    return result.map((json) => Produk.fromMap(json)).toList();
-  }
-
-  // --- 8. DML SEARCH: PENCARIAN PRODUK BERDASARKAN KATA KUNCI (SQL LIKE) ---
-  Future<List<Produk>> searchProduk(String keyword) async {
-    final db = await instance.database;
-    // Eksekusi kueri SELECT dengan klausa LIKE untuk pencarian sebagian nama produk
-    final result = await db.query(
-      'produk',
-      where: 'nama_produk LIKE ?',
-      whereArgs: ['%$keyword%'],    // Wildcard '%' mencocokkan kata di awal, tengah, atau akhir
+      where: 'kategori = ?',
+      whereArgs: [kategori],
       orderBy: 'id DESC',
     );
     return result.map((json) => Produk.fromMap(json)).toList();
   }
 
-  // --- 9. DML UPDATE: MEMPERBARUI DATA PRODUK DI SQLITE ---
+  Future<List<Produk>> searchProduk(String keyword) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'produk',
+      where: 'nama_produk LIKE ?',
+      whereArgs: ['%$keyword%'],
+      orderBy: 'id DESC',
+    );
+    return result.map((json) => Produk.fromMap(json)).toList();
+  }
+
   Future<int> updateProduk(Produk produk) async {
     final db = await instance.database;
-    // Mengeksekusi kueri UPDATE produk SET ... WHERE id = ?
     return await db.update(
       'produk',
-      produk.toMap(),
-      where: 'id = ?',              // Kondisi spesifik baris yang akan diperbarui
-      whereArgs: [produk.id],       // ID produk yang menjadi target perubahan
+      produk.toMap(includeCreatedAt: false),
+      where: 'id = ?',
+      whereArgs: [produk.id],
     );
   }
 
-  // --- 10. DML DELETE: MENGHAPUS PRODUK DARI SQLITE BERDASARKAN ID ---
   Future<int> deleteProduk(int id) async {
     final db = await instance.database;
-    // Mengeksekusi kueri DELETE FROM produk WHERE id = ?
-    return await db.delete(
-      'produk',
-      where: 'id = ?',              // Kondisi spesifik baris yang dihapus
-      whereArgs: [id],              // Parameter ID yang ditargetkan
-    );
+    return await db.delete('produk', where: 'id = ?', whereArgs: [id]);
   }
 }

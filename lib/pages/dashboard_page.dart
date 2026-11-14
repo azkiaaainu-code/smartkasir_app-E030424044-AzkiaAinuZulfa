@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 // Mengimpor format mata uang
 import 'package:intl/intl.dart';
-
 // Mengimpor model data, database helper, dan formulir produk
 import '../models/produk.dart';
 import '../helpers/database_helper.dart';
@@ -19,6 +18,7 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   // Indeks kategori aktif terpilih
   int _kategoriTerpilih = 0;
+  // Menambahkan 'Dessert' sesuai Tantangan Live Tweak 1
   final List<String> _kategoriList = ['Semua', 'Makanan', 'Minuman', 'Snack', 'Dessert'];
 
   // Variabel penampung hasil asinkron basis data SQLite
@@ -92,23 +92,27 @@ class _DashboardPageState extends State<DashboardPage> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
-              Navigator.pop(ctx); // Tutup dialog modal
-              // Eksekusi DELETE ke SQLite
-              await DatabaseHelper.instance.deleteProduk(item.id!);
-              if (!mounted || scaffoldMessenger == null) return;
-              scaffoldMessenger.showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Produk "${item.nama}" berhasil dihapus dari database!',
-                  ),
-                  backgroundColor: Colors.red.shade700,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-              // Muat ulang katalog beranda
-              _muatDataProduk();
-            },
+  Navigator.pop(ctx); // Tutup dialog modal
+
+  // Eksekusi DELETE ke SQLite
+  await DatabaseHelper.instance.deleteProduk(item.id!);
+
+  // Pastikan halaman masih aktif
+  if (!context.mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        'Produk "${item.nama}" berhasil dihapus dari database!',
+      ),
+      backgroundColor: Colors.red.shade700,
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
+
+  // Muat ulang katalog beranda
+  _muatDataProduk();
+},
             child: const Text('Hapus', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -121,7 +125,6 @@ class _DashboardPageState extends State<DashboardPage> {
     Color warnaLatar;
     Color warnaTeks;
     String label;
-
     if (stok == 0) {
       warnaLatar = Colors.red.shade100;
       warnaTeks = Colors.red.shade900;
@@ -135,7 +138,6 @@ class _DashboardPageState extends State<DashboardPage> {
       warnaTeks = Colors.green.shade900;
       label = 'Stok $stok';
     }
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -161,12 +163,12 @@ class _DashboardPageState extends State<DashboardPage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFFE2E8F0),
+          color: const Color(0xFFE2E8F0), // Garis pembatas halus slate-200
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: Colors.black.withValues(alpha: 0.08), // Elevasi bayangan lebih tegas
             blurRadius: 8,
             spreadRadius: 1,
             offset: const Offset(0, 3),
@@ -223,8 +225,7 @@ class _DashboardPageState extends State<DashboardPage> {
               ],
             ),
           ),
-
-          // 2. DESKRIPSI & HARGA PRODUK
+          // 2. DESKRIPSI & HARGA PRODUK (RAPAT & PROPORSIONAL)
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
             child: Column(
@@ -245,7 +246,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 Text(
                   _formatRupiah(item.hargaJual),
                   style: const TextStyle(
-                    color: Colors.pink,
+                    color: Color(0xFFE91E63), // Diubah ke Pink Utama
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
@@ -254,7 +255,6 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
           const Spacer(),
-
           // 3. BARIS TOMBOL AKSI CRUD (EDIT, HAPUS, & TAMBAH KE CART)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -272,12 +272,13 @@ class _DashboardPageState extends State<DashboardPage> {
                   icon: const Icon(
                     Icons.edit_outlined,
                     size: 18,
-                    color: Colors.pink,
+                    color: Color(0xFFE91E63), // Diubah ke Pink Utama
                   ),
                   tooltip: 'Edit Produk',
                   padding: const EdgeInsets.all(4),
                   constraints: const BoxConstraints(),
                   onPressed: () async {
+                    // Navigasi ke Form Edit dengan membawa objek produk
                     final refresh = await Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -304,7 +305,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   icon: const Icon(
                     Icons.add_shopping_cart,
                     size: 18,
-                    color: Colors.pink,
+                    color: Color(0xFFE91E63), // Diubah ke Pink Utama
                   ),
                   tooltip: 'Tambah ke Kasir',
                   padding: const EdgeInsets.all(4),
@@ -346,7 +347,7 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ],
         ),
-        backgroundColor: Colors.pink,
+        backgroundColor: const Color(0xFFE91E63), // Diubah ke Pink Utama
         actions: [
           IconButton(
             icon: const Icon(Icons.add_circle_outline, color: Colors.white),
@@ -363,14 +364,17 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
       body: Column(
         children: [
-          // 1. BANNER TOTAL TRANSAKSI HARIAN
+          // 1. BANNER TOTAL TRANSAKSI HARIAN (Dengan Gradasi Pink Estetik Sesuai Palet)
           Container(
             width: double.infinity,
             margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Colors.pinkAccent, Colors.pink],
+                colors: [
+                  Color(0xFFE91E63), // Pink Utama (0xFFE91E63)
+                  Color(0xFFEC407A), // Pink Cerah Shade 400 (0xFFEC407A)
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -424,7 +428,6 @@ class _DashboardPageState extends State<DashboardPage> {
               ],
             ),
           ),
-
           // 2. KOTAK PENCARIAN CEPAT (SQL LIKE)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -436,7 +439,7 @@ class _DashboardPageState extends State<DashboardPage> {
               },
               decoration: InputDecoration(
                 hintText: 'Cari nama produk kasir ...',
-                prefixIcon: const Icon(Icons.search, color: Colors.pink),
+                prefixIcon: const Icon(Icons.search, color: Color(0xFFE91E63)),
                 suffixIcon: _keywordPencarian.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear, size: 18),
@@ -465,7 +468,6 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
           const SizedBox(height: 12),
-
           // 3. FILTER CHIP HORIZONTAL KATEGORI
           SizedBox(
             height: 38,
@@ -480,7 +482,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   child: ChoiceChip(
                     label: Text(_kategoriList[index]),
                     selected: isSelected,
-                    selectedColor: Colors.pink,
+                    selectedColor: const Color(0xFFE91E63), // Diubah ke Pink Utama
                     backgroundColor: Colors.white,
                     labelStyle: TextStyle(
                       color: isSelected ? Colors.white : Colors.black87,
@@ -505,16 +507,20 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
           const SizedBox(height: 12),
-
-          // 4. DAFTAR KATALOG DENGAN FUTUREBUILDER
+          // 4. DAFTAR KATALOG DENGAN FUTUREBUILDER (DATA PERSISTENSI SQLITE)
           Expanded(
             child: FutureBuilder<List<Produk>>(
               future: _produkFuture,
               builder: (context, snapshot) {
+                // KONDISI 1: Sedang memuat data (Loading State)
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Colors.pink));
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFFE91E63),
+                    ),
+                  );
                 }
-
+                // KONDISI 2: Terjadi kesalahan (Error State)
                 if (snapshot.hasError) {
                   return Center(
                     child: Padding(
@@ -526,7 +532,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   );
                 }
-
+                // KONDISI 3: Data Kosong
                 final daftarProduk = snapshot.data ?? [];
                 if (daftarProduk.isEmpty) {
                   return Center(
@@ -552,7 +558,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   );
                 }
-
+                // KONDISI 4: Data Berhasil Dimuat (Success State)
                 return GridView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -579,8 +585,8 @@ class _DashboardPageState extends State<DashboardPage> {
           );
           if (refresh == true) _muatDataProduk();
         },
-        backgroundColor: Colors.pink,
-        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFFE91E63), // Diubah ke Pink Utama
+        foregroundColor: const Color.fromARGB(255, 241, 239, 240),
         icon: const Icon(Icons.add),
         label: const Text('Tambah Produk'),
       ),
