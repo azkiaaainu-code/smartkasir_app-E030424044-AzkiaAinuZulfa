@@ -1,9 +1,11 @@
 
-// Mengimpor antarmuka Flutter dan SharedPreferences
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Mengimpor halaman kelola karyawan untuk jalan pintas menu
+// Import Database Helper untuk menghitung jumlah pelanggan
+import '../helpers/database_helper.dart';
+
+// Import halaman kelola karyawan dan pelanggan
 import 'kelola_karyawan_page.dart';
 import 'kelola_pelanggan_page.dart';
 
@@ -25,13 +27,26 @@ class _ProfilTokoPageState extends State<ProfilTokoPage> {
   // Status visual tombol simpan
   bool _sedangMenyimpan = false;
 
-  // Nama kasir aktif yang sedang bertugas
+  // Nama kasir aktif
   String _activeCashierName = 'Belum Ditentukan';
+
+  // Future untuk menghitung jumlah pelanggan dari database
+  late Future<int> _jumlahPelangganFuture;
+
+  // Warna tema aplikasi
+  static const Color warnaPink = Color(0xFFE91E63);
+  static const Color warnaPinkMuda = Color(0xFFF8BBD0);
+  static const Color warnaBackground = Color(0xFFFFF5F8);
 
   @override
   void initState() {
     super.initState();
+
     _muatProfilToko();
+
+    // Mengambil jumlah pelanggan dari SQLite
+    _jumlahPelangganFuture =
+        DatabaseHelper.instance.countPelanggan();
   }
 
   @override
@@ -43,7 +58,15 @@ class _ProfilTokoPageState extends State<ProfilTokoPage> {
     super.dispose();
   }
 
-  // --- MEMBACA PENGATURAN TOKO DARI SHAREDPREFERENCES ---
+  // MEMUAT ULANG JUMLAH PELANGGAN
+  void _muatJumlahPelanggan() {
+    setState(() {
+      _jumlahPelangganFuture =
+          DatabaseHelper.instance.countPelanggan();
+    });
+  }
+
+  // MEMBACA PENGATURAN TOKO DARI SHAREDPREFERENCES
   Future<void> _muatProfilToko() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -65,54 +88,117 @@ class _ProfilTokoPageState extends State<ProfilTokoPage> {
           'Terima Kasih Atas Kunjungan Anda! Barang yang sudah dibeli tidak dapat ditukar.';
 
       _activeCashierName =
-          prefs.getString('active_cashier_name') ?? 'Belum Ditentukan';
+          prefs.getString('active_cashier_name') ??
+          'Belum Ditentukan';
     });
   }
 
-  // --- MENYIMPAN PENGATURAN TOKO KE SHAREDPREFERENCES ---
+  // MENYIMPAN PENGATURAN TOKO
   Future<void> _simpanProfilToko() async {
     setState(() => _sedangMenyimpan = true);
 
-    final prefs = await SharedPreferences.getInstance();
+    try {
+      final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setString(
-      'nama_toko',
-      _namaTokoController.text.trim(),
-    );
+      await prefs.setString(
+        'nama_toko',
+        _namaTokoController.text.trim(),
+      );
 
-    await prefs.setString(
-      'alamat_toko',
-      _alamatController.text.trim(),
-    );
+      await prefs.setString(
+        'alamat_toko',
+        _alamatController.text.trim(),
+      );
 
-    await prefs.setString(
-      'no_wa',
-      _noWaController.text.trim(),
-    );
+      await prefs.setString(
+        'no_wa',
+        _noWaController.text.trim(),
+      );
 
-    await prefs.setString(
-      'footer_struk',
-      _footerController.text.trim(),
-    );
+      await prefs.setString(
+        'footer_struk',
+        _footerController.text.trim(),
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() => _sedangMenyimpan = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Identitas toko berhasil diperbarui!',
+          ),
+          backgroundColor: Colors.green.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Identitas toko berhasil diperbarui!'),
-        backgroundColor: Colors.green.shade700,
-        behavior: SnackBarBehavior.floating,
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menyimpan pengaturan: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _sedangMenyimpan = false);
+      }
+    }
+  }
+
+  // KOMPONEN DEKORASI INPUT FORM
+  InputDecoration _inputDecoration({
+    required String label,
+    required IconData icon,
+    String? hint,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon, color: warnaPink),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
       ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: warnaPinkMuda),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(
+          color: warnaPink,
+          width: 2,
+        ),
+      ),
+      filled: true,
+      fillColor: Colors.white,
+    );
+  }
+
+  // KOMPONEN DEKORASI KARTU
+  BoxDecoration _cardDecoration() {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: warnaPinkMuda),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.05),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF5F8),
+      backgroundColor: warnaBackground,
 
+      // APP BAR
       appBar: AppBar(
         title: const Text(
           'Profil & Pengaturan Toko',
@@ -121,12 +207,14 @@ class _ProfilTokoPageState extends State<ProfilTokoPage> {
             color: Colors.white,
           ),
         ),
-        backgroundColor: const Color(0xFFE91E63),
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: warnaPink,
+        iconTheme: const IconThemeData(
+          color: Colors.white,
+        ),
       ),
 
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -134,25 +222,12 @@ class _ProfilTokoPageState extends State<ProfilTokoPage> {
             // KARTU RINGKASAN KASIR BERTUGAS
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: const Color(0xFFF8BBD0),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
+              decoration: _cardDecoration(),
               child: Row(
                 children: [
                   const CircleAvatar(
                     radius: 24,
-                    backgroundColor: Color(0xFFE91E63),
+                    backgroundColor: warnaPink,
                     child: Icon(
                       Icons.storefront,
                       color: Colors.white,
@@ -203,9 +278,9 @@ class _ProfilTokoPageState extends State<ProfilTokoPage> {
                     ),
                     label: const Text('Kelola'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFE91E63),
+                      foregroundColor: warnaPink,
                       side: const BorderSide(
-                        color: Color(0xFFE91E63),
+                        color: warnaPink,
                       ),
                     ),
                   ),
@@ -215,26 +290,13 @@ class _ProfilTokoPageState extends State<ProfilTokoPage> {
 
             const SizedBox(height: 12),
 
-            // MENU MANAJEMEN DATA PELANGGAN & MEMBER
+            // MENU DATA PELANGGAN & COUNTER JUMLAH MEMBER
             Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: const Color(0xFFF8BBD0),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
+              decoration: _cardDecoration(),
               child: ListTile(
                 leading: const CircleAvatar(
                   radius: 20,
-                  backgroundColor: Color(0xFFE91E63),
+                  backgroundColor: warnaPink,
                   child: Icon(
                     Icons.people_alt,
                     color: Colors.white,
@@ -250,40 +312,75 @@ class _ProfilTokoPageState extends State<ProfilTokoPage> {
                   ),
                 ),
 
-                subtitle: const Text(
-                  'Kelola member CRM dan navigasi rute pengantaran',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
+                // COUNTER JUMLAH PELANGGAN DARI DATABASE SQLITE
+                subtitle: FutureBuilder<int>(
+                  future: _jumlahPelangganFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return const Text(
+                        'Memuat jumlah pelanggan...',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      );
+                    }
+
+                    if (snapshot.hasError) {
+                      return const Text(
+                        'Gagal memuat jumlah pelanggan',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.red,
+                        ),
+                      );
+                    }
+
+                    final jumlahPelanggan = snapshot.data ?? 0;
+
+                    return Text(
+                      '$jumlahPelanggan Member Pelanggan Terdaftar',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: warnaPink,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    );
+                  },
                 ),
 
                 trailing: const Icon(
                   Icons.chevron_right,
-                  color: Color(0xFFE91E63),
+                  color: warnaPink,
                 ),
 
-                onTap: () {
-                  Navigator.push(
+                onTap: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) =>
                           const KelolaPelangganPage(),
                     ),
                   );
+
+                  // Memperbarui counter setelah kembali
+                  if (mounted) {
+                    _muatJumlahPelanggan();
+                  }
                 },
               ),
             ),
 
             const SizedBox(height: 20),
 
-            // FORM IDENTITAS USAHA
+            // JUDUL FORM IDENTITAS USAHA
             const Text(
               'IDENTITAS USAHA & STRUK KASIR',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
-                color: Color(0xFFE91E63),
+                color: warnaPink,
               ),
             ),
 
@@ -292,24 +389,9 @@ class _ProfilTokoPageState extends State<ProfilTokoPage> {
             // 1. NAMA TOKO
             TextFormField(
               controller: _namaTokoController,
-              decoration: InputDecoration(
-                labelText: 'Nama Toko / Usaha',
-                prefixIcon: const Icon(
-                  Icons.store,
-                  color: Color(0xFFE91E63),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(
-                    color: Color(0xFFE91E63),
-                    width: 2,
-                  ),
-                ),
-                filled: true,
-                fillColor: Colors.white,
+              decoration: _inputDecoration(
+                label: 'Nama Toko / Usaha',
+                icon: Icons.store,
               ),
             ),
 
@@ -319,51 +401,21 @@ class _ProfilTokoPageState extends State<ProfilTokoPage> {
             TextFormField(
               controller: _alamatController,
               maxLines: 2,
-              decoration: InputDecoration(
-                labelText: 'Alamat Toko',
-                prefixIcon: const Icon(
-                  Icons.location_on_outlined,
-                  color: Color(0xFFE91E63),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(
-                    color: Color(0xFFE91E63),
-                    width: 2,
-                  ),
-                ),
-                filled: true,
-                fillColor: Colors.white,
+              decoration: _inputDecoration(
+                label: 'Alamat Toko',
+                icon: Icons.location_on_outlined,
               ),
             ),
 
             const SizedBox(height: 14),
 
-            // 3. KONTAK WHATSAPP / TELEPON
+            // 3. KONTAK WHATSAPP
             TextFormField(
               controller: _noWaController,
               keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: 'Nomor WhatsApp / Kontak Toko',
-                prefixIcon: const Icon(
-                  Icons.phone_outlined,
-                  color: Color(0xFFE91E63),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(
-                    color: Color(0xFFE91E63),
-                    width: 2,
-                  ),
-                ),
-                filled: true,
-                fillColor: Colors.white,
+              decoration: _inputDecoration(
+                label: 'Nomor WhatsApp / Kontak Toko',
+                icon: Icons.phone_outlined,
               ),
             ),
 
@@ -373,25 +425,10 @@ class _ProfilTokoPageState extends State<ProfilTokoPage> {
             TextFormField(
               controller: _footerController,
               maxLines: 2,
-              decoration: InputDecoration(
-                labelText: 'Catatan Kaki Struk (Footer Nota)',
-                hintText: 'Contoh: Terima kasih atas kunjungan Anda!',
-                prefixIcon: const Icon(
-                  Icons.receipt_outlined,
-                  color: Color(0xFFE91E63),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(
-                    color: Color(0xFFE91E63),
-                    width: 2,
-                  ),
-                ),
-                filled: true,
-                fillColor: Colors.white,
+              decoration: _inputDecoration(
+                label: 'Catatan Kaki Struk (Footer Nota)',
+                icon: Icons.receipt_outlined,
+                hint: 'Contoh: Terima kasih atas kunjungan Anda!',
               ),
             ),
 
@@ -404,9 +441,12 @@ class _ProfilTokoPageState extends State<ProfilTokoPage> {
                   : _simpanProfilToko,
 
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE91E63),
+                backgroundColor: warnaPink,
+                disabledBackgroundColor: warnaPinkMuda,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),

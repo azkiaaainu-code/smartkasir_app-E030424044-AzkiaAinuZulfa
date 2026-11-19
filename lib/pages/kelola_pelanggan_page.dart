@@ -111,7 +111,7 @@ class _KelolaPelangganPageState extends State<KelolaPelangganPage> {
     // Membangun URL resmi Google Maps Directions API
     final url = Uri.parse(
       'https://www.google.com/maps/dir/?api=1'
-      '&destination=$latitude,$longitude',
+      '&destination=$latitude,$longitude&travelmode=two_wheeler',
     );
 
     try {

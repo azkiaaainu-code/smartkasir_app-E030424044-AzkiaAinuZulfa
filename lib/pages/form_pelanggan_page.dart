@@ -217,7 +217,9 @@ class _FormPelangganPageState extends State<FormPelangganPage> {
       id: isEdit ? widget.pelanggan!.id : null,
       kodePelanggan: _kodeController.text.trim(),
       namaPelanggan: _namaController.text.trim(),
-      nomorWa: _nomorWaController.text.trim(),
+      nomorWa: _nomorWaController.text.trim().startsWith('08')
+          ? '62${_nomorWaController.text.trim().substring(1)}'
+          : _nomorWaController.text.trim(),
       alamat: _alamatController.text.trim(),
       latitude: lat,
       longitude: lng,
