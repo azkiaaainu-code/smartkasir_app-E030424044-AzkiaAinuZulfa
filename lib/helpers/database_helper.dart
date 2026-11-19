@@ -1,126 +1,89 @@
-// Mengimpor pustaka dasar Flutter, SQLite, and path
+
+// Mengimpor pustaka dasar Flutter, SQLite, dan path
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
-// Mengimpor model data Produk dan Karyawan
+// Mengimpor model data Produk, Karyawan, dan Pelanggan
 import '../models/produk.dart';
 import '../models/karyawan.dart';
+import '../models/pelanggan.dart';
 
 // Kelas Pengelola Basis Data Lokal SQLite (Pola Desain Singleton)
 class DatabaseHelper {
-  // Instansiasi tunggal statis
+  // Instansiasi tunggal statis (Singleton Pattern)
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
 
   DatabaseHelper._init();
 
-  // Getter pembuka koneksi database aktif
+  // Getter pembuka koneksi basis data aktif
   Future<Database> get database async {
-    if (_database != null) return _database!;
+    if (_database != null) {
+      // Menjamin seeder produk awal masuk jika tabel produk masih kosong
+      await _seedProdukAwal(_database!);
+      return _database!;
+    }
+
     _database = await _initDB('smartkasir.db');
-    await _seedIfNeeded(_database!);
-    await _normalisasiGambarProduk(_database!);
+
+    // Menjamin seeder produk awal masuk saat pertama kali inisialisasi
+    await _seedProdukAwal(_database!);
     return _database!;
   }
 
-  Future<void> _seedIfNeeded(Database db) async {
-    final produkRow = await db.rawQuery('SELECT COUNT(*) as count FROM produk');
-    final produkCount = (produkRow.first['count'] as int?) ?? 0;
-
-    if (produkCount == 0) {
-      for (final produk in produkAwalSQLite) {
-        await db.insert('produk', produk.toMap());
-      }
-    }
-
-    final karyawanRow = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM karyawan',
-    );
-    final karyawanCount = (karyawanRow.first['count'] as int?) ?? 0;
-
-    if (karyawanCount == 0) {
-      await db.rawInsert('''
-        INSERT INTO karyawan (nama_karyawan, pin, peran)
-        VALUES ('Ahmad Kasir', '1234', 'Kasir')
-      ''');
-      await db.rawInsert('''
-        INSERT INTO karyawan (nama_karyawan, pin, peran)
-        VALUES ('Siti Supervisor', '8888', 'Manajer')
-      ''');
-    }
-  }
-
-  Future<void> _normalisasiGambarProduk(Database db) async {
-    final produkList = await db.query('produk');
-
-    for (final row in produkList) {
-      final nama = (row['nama_produk'] as String? ?? '').trim();
-      final lower = nama.toLowerCase();
-      String? gambarUrl;
-
-      if (lower.contains('kopi')) {
-        gambarUrl = 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=500';
-      } else if (lower.contains('roti') || lower.contains('bakar')) {
-        gambarUrl =
-            'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500';
-      } else if (lower.contains('matcha') || lower.contains('latte')) {
-        gambarUrl =
-            'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?w=500';
-      } else if (lower.contains('nasi') && lower.contains('goreng')) {
-        gambarUrl = 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=500';
-      } else if (lower.contains('keripik') || lower.contains('singkong')) {
-        gambarUrl = 'https://images.unsplash.com/photo-1740993384870-0793845268e6?w=800';
-      } else if (lower.contains('pisang') || lower.contains('goreng')) {
-        gambarUrl = 'https://images.unsplash.com/photo-1762941904142-9d91ca413e66?w=800';
-      }
-
-      if (gambarUrl != null) {
-        await db.update(
-          'produk',
-          {'gambar_path': gambarUrl},
-          where: 'id = ?',
-          whereArgs: [row['id']],
-        );
-      }
-    }
-  }
-
   // Inisialisasi berkas basis data SQLite
+  // Mendukung Android fisik dan Web Chrome
   Future<Database> _initDB(String filePath) async {
     if (kIsWeb) {
+      // Driver khusus SQLite WebAssembly untuk Google Chrome
       databaseFactory = databaseFactoryFfiWeb;
+
       return await databaseFactory.openDatabase(
         filePath,
         options: OpenDatabaseOptions(
-          version: 2,
+          version: 3,
           onCreate: _createDB,
           onUpgrade: _onUpgradeDB,
         ),
       );
     } else {
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
-
+      // Driver bawaan SQLite native untuk Android dan iOS
       final dbPath = await getDatabasesPath();
       final path = join(dbPath, filePath);
+
       return await openDatabase(
         path,
-        version: 2,
+        version: 3,
         onCreate: _createDB,
         onUpgrade: _onUpgradeDB,
       );
     }
   }
 
-  // DDL: Pembuatan Tabel Basis Data (Versi Baru)
-  Future _createDB(Database db, int version) async {
-    // HAPUS PAKSA TABEL LAMA AGAR CACHE BERSIH TOTAL DAN DATA TERBARU MASUK
-    await db.execute('DROP TABLE IF EXISTS produk');
-    await db.execute('DROP TABLE IF EXISTS karyawan');
+  // Seeder Data Produk Awal
+  // Memastikan 6 produk bawaan tersedia jika tabel produk kosong
+  Future<void> _seedProdukAwal(Database db) async {
+    try {
+      final count = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT COUNT(*) FROM produk'),
+      ) ?? 0;
 
-    // 1. Pembuatan Tabel Produk
+      // Hanya masukkan produk jika tabel benar-benar kosong
+      if (count == 0) {
+        for (final produk in produkAwalSQLite) {
+          await db.insert('produk', produk.toMap());
+        }
+      }
+    } catch (_) {
+      // Mengabaikan jika tabel produk belum terbentuk
+    }
+  }
+
+  // DDL: Pembuatan Tabel Basis Data Saat Instalasi Pertama
+  Future _createDB(Database db, int version) async {
+    // 1. Pembuatan Tabel Produk (Modul M11)
     await db.execute('''
       CREATE TABLE produk (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -136,7 +99,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // 2. Pembuatan Tabel Karyawan
+    // 2. Pembuatan Tabel Karyawan (Modul M12)
     await db.execute('''
       CREATE TABLE karyawan (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,25 +109,107 @@ class DatabaseHelper {
       )
     ''');
 
-    // 3. Memasukkan data produk awal otomatis (Seeding Data Awal Toko)
-    for (final produk in produkAwalSQLite) {
-      await db.insert('produk', produk.toMap());
-    }
+    // 3. Pembuatan Tabel Pelanggan dan Koordinat GPS Maps (Modul M13)
+    await db.execute('''
+      CREATE TABLE pelanggan (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kode_pelanggan TEXT UNIQUE NOT NULL,
+        nama_pelanggan TEXT NOT NULL,
+        nomor_wa TEXT NOT NULL,
+        alamat TEXT NOT NULL,
+        latitude REAL,
+        longitude REAL,
+        created_at TEXT NOT NULL
+      )
+    ''');
 
-    // 4. Memasukkan data staf awal otomatis
+    // Seeding Data Awal: 6 Produk Bawaan SmartKasir
+    await _seedProdukAwal(db);
+
+    // Seeding Data Awal: Karyawan Default
     await db.rawInsert('''
       INSERT INTO karyawan (nama_karyawan, pin, peran)
       VALUES ('Ahmad Kasir', '1234', 'Kasir')
     ''');
+
     await db.rawInsert('''
       INSERT INTO karyawan (nama_karyawan, pin, peran)
       VALUES ('Siti Supervisor', '8888', 'Manajer')
     ''');
+
+    // Seeding Data Awal: Pelanggan Binaan Awal
+    // Dengan Koordinat GPS Banjarmasin
+    await db.rawInsert('''
+      INSERT INTO pelanggan (
+        kode_pelanggan,
+        nama_pelanggan,
+        nomor_wa,
+        alamat,
+        latitude,
+        longitude,
+        created_at
+      )
+      VALUES (
+        'CUST-001',
+        'Warung Bu Siti',
+        '081234567890',
+        'Jl. Hasan Basri No. 12, Banjarmasin',
+        -3.298280,
+        114.588820,
+        '2026-11-01 09:00:00'
+      )
+    ''');
+
+    await db.rawInsert('''
+      INSERT INTO pelanggan (
+        kode_pelanggan,
+        nama_pelanggan,
+        nomor_wa,
+        alamat,
+        latitude,
+        longitude,
+        created_at
+      )
+      VALUES (
+        'CUST-002',
+        'Budi Santoso',
+        '085712345678',
+        'Jl. Kayu Tangi II No. 45, Banjarmasin',
+        -3.295410,
+        114.582150,
+        '2026-11-02 10:30:00'
+      )
+    ''');
   }
 
-  // DDL: Migrasi Skema jika versi basis data ditingkatkan
-  Future _onUpgradeDB(Database db, int oldVersion, int newVersion) async {
+  // DDL: Migrasi Skema Bertahap saat Versi Database Naik
+  Future _onUpgradeDB(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    // 1. Memastikan struktur tabel produk versi lama tetap ada
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS produk (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kode_produk TEXT UNIQUE,
+        nama_produk TEXT NOT NULL,
+        kategori TEXT NOT NULL,
+        harga_beli REAL NOT NULL,
+        harga_jual REAL NOT NULL,
+        stok INTEGER NOT NULL,
+        gambar_path TEXT,
+        diskon_persen INTEGER DEFAULT 0,
+        created_at TEXT
+      )
+    ''');
+
+    // 2. Memastikan data produk tidak hilang
+    // Jika kosong, masukkan 6 produk awal
+    await _seedProdukAwal(db);
+
     if (oldVersion < 2) {
+      // Menambahkan tabel karyawan jika berpindah dari versi 1
       await db.execute('''
         CREATE TABLE IF NOT EXISTS karyawan (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,47 +219,181 @@ class DatabaseHelper {
         )
       ''');
 
-      final existingProduk = await db.query('produk');
-      if (existingProduk.isEmpty) {
-        for (final produk in produkAwalSQLite) {
-          await db.insert('produk', produk.toMap());
-        }
-      }
+      final countKaryawan = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT COUNT(*) FROM karyawan'),
+      ) ?? 0;
 
-      final existingKaryawan = await db.query('karyawan');
-      if (existingKaryawan.isEmpty) {
+      if (countKaryawan == 0) {
         await db.rawInsert('''
           INSERT INTO karyawan (nama_karyawan, pin, peran)
           VALUES ('Ahmad Kasir', '1234', 'Kasir')
         ''');
+
         await db.rawInsert('''
           INSERT INTO karyawan (nama_karyawan, pin, peran)
           VALUES ('Siti Supervisor', '8888', 'Manajer')
         ''');
       }
     }
+
+    if (oldVersion < 3) {
+      // Menambahkan tabel pelanggan jika berpindah dari versi 2
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS pelanggan (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          kode_pelanggan TEXT UNIQUE NOT NULL,
+          nama_pelanggan TEXT NOT NULL,
+          nomor_wa TEXT NOT NULL,
+          alamat TEXT NOT NULL,
+          latitude REAL,
+          longitude REAL,
+          created_at TEXT NOT NULL
+        )
+      ''');
+
+      final countPelanggan = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT COUNT(*) FROM pelanggan'),
+      ) ?? 0;
+
+      if (countPelanggan == 0) {
+        await db.rawInsert('''
+          INSERT INTO pelanggan (
+            kode_pelanggan,
+            nama_pelanggan,
+            nomor_wa,
+            alamat,
+            latitude,
+            longitude,
+            created_at
+          )
+          VALUES (
+            'CUST-001',
+            'Warung Bu Siti',
+            '081234567890',
+            'Jl. Hasan Basri No. 12, Banjarmasin',
+            -3.298280,
+            114.588820,
+            '2026-11-01 09:00:00'
+          )
+        ''');
+
+        await db.rawInsert('''
+          INSERT INTO pelanggan (
+            kode_pelanggan,
+            nama_pelanggan,
+            nomor_wa,
+            alamat,
+            latitude,
+            longitude,
+            created_at
+          )
+          VALUES (
+            'CUST-002',
+            'Budi Santoso',
+            '085712345678',
+            'Jl. Kayu Tangi II No. 45, Banjarmasin',
+            -3.295410,
+            114.582150,
+            '2026-11-02 10:30:00'
+          )
+        ''');
+      }
+    }
   }
 
   // ==========================================
-  // METODE CRUD: TABEL KARYAWAN
+  // METODE CRUD: TABEL PELANGGAN (MODUL M13)
   // ==========================================
 
-  // 1. CREATE: Menyimpan Karyawan Baru
+  // 1. CREATE: Menyimpan data pelanggan baru
+  Future<int> insertPelanggan(Pelanggan pelanggan) async {
+    final db = await instance.database;
+    return await db.insert('pelanggan', pelanggan.toMap());
+  }
+
+  // 2. READ: Mengambil seluruh daftar pelanggan
+  // Diurutkan dari yang terbaru
+  Future<List<Pelanggan>> getAllPelanggan() async {
+    final db = await instance.database;
+    final result = await db.query(
+      'pelanggan',
+      orderBy: 'id DESC',
+    );
+
+    return result.map((json) => Pelanggan.fromMap(json)).toList();
+  }
+
+  // 3. READ: Mencari pelanggan berdasarkan nama, nomor WA, atau kode member
+  Future<List<Pelanggan>> searchPelanggan(String keyword) async {
+    final db = await instance.database;
+
+    final result = await db.query(
+      'pelanggan',
+      where: 'nama_pelanggan LIKE ? OR nomor_wa LIKE ? OR kode_pelanggan LIKE ?',
+      whereArgs: ['%$keyword%', '%$keyword%', '%$keyword%'],
+      orderBy: 'id DESC',
+    );
+
+    return result.map((json) => Pelanggan.fromMap(json)).toList();
+  }
+
+  // 4. UPDATE: Memperbarui data profil dan koordinat GPS pelanggan
+  Future<int> updatePelanggan(Pelanggan pelanggan) async {
+    final db = await instance.database;
+
+    return await db.update(
+      'pelanggan',
+      pelanggan.toMap(),
+      where: 'id = ?',
+      whereArgs: [pelanggan.id],
+    );
+  }
+
+  // 5. DELETE: Menghapus data pelanggan berdasarkan ID
+  Future<int> deletePelanggan(int id) async {
+    final db = await instance.database;
+
+    return await db.delete(
+      'pelanggan',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // 6. COUNT: Menghitung total jumlah pelanggan
+  Future<int> countPelanggan() async {
+    final db = await instance.database;
+
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as total FROM pelanggan',
+    );
+
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // ==========================================
+  // METODE CRUD: TABEL KARYAWAN (MODUL M12)
+  // ==========================================
+
   Future<int> insertKaryawan(Karyawan karyawan) async {
     final db = await instance.database;
     return await db.insert('karyawan', karyawan.toMap());
   }
 
-  // 2. READ: Mengambil Seluruh Karyawan
   Future<List<Karyawan>> getAllKaryawan() async {
     final db = await instance.database;
-    final result = await db.query('karyawan', orderBy: 'id ASC');
+
+    final result = await db.query(
+      'karyawan',
+      orderBy: 'id ASC',
+    );
+
     return result.map((json) => Karyawan.fromMap(json)).toList();
   }
 
-  // 3. UPDATE: Memperbarui Data Karyawan
   Future<int> updateKaryawan(Karyawan karyawan) async {
     final db = await instance.database;
+
     return await db.update(
       'karyawan',
       karyawan.toMap(),
@@ -223,14 +402,18 @@ class DatabaseHelper {
     );
   }
 
-  // 4. DELETE: Menghapus Karyawan Berdasarkan ID
   Future<int> deleteKaryawan(int id) async {
     final db = await instance.database;
-    return await db.delete('karyawan', where: 'id = ?', whereArgs: [id]);
+
+    return await db.delete(
+      'karyawan',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   // ==========================================
-  // METODE CRUD: TABEL PRODUK (DARI MINGGU 11)
+  // METODE CRUD: TABEL PRODUK (MODUL M11)
   // ==========================================
 
   Future<int> insertProduk(Produk produk) async {
@@ -240,38 +423,51 @@ class DatabaseHelper {
 
   Future<List<Produk>> getAllProduk() async {
     final db = await instance.database;
-    final result = await db.query('produk', orderBy: 'id DESC');
+
+    final result = await db.query(
+      'produk',
+      orderBy: 'id DESC',
+    );
+
     return result.map((json) => Produk.fromMap(json)).toList();
   }
 
   Future<List<Produk>> getProdukByKategori(String kategori) async {
     final db = await instance.database;
-    if (kategori == 'Semua') return await getAllProduk();
+
+    if (kategori == 'Semua') {
+      return await getAllProduk();
+    }
+
     final result = await db.query(
       'produk',
       where: 'kategori = ?',
       whereArgs: [kategori],
       orderBy: 'id DESC',
     );
+
     return result.map((json) => Produk.fromMap(json)).toList();
   }
 
   Future<List<Produk>> searchProduk(String keyword) async {
     final db = await instance.database;
+
     final result = await db.query(
       'produk',
       where: 'nama_produk LIKE ?',
       whereArgs: ['%$keyword%'],
       orderBy: 'id DESC',
     );
+
     return result.map((json) => Produk.fromMap(json)).toList();
   }
 
   Future<int> updateProduk(Produk produk) async {
     final db = await instance.database;
+
     return await db.update(
       'produk',
-      produk.toMap(includeCreatedAt: false),
+      produk.toMap(),
       where: 'id = ?',
       whereArgs: [produk.id],
     );
@@ -279,6 +475,21 @@ class DatabaseHelper {
 
   Future<int> deleteProduk(int id) async {
     final db = await instance.database;
-    return await db.delete('produk', where: 'id = ?', whereArgs: [id]);
+
+    return await db.delete(
+      'produk',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> countProduk() async {
+    final db = await instance.database;
+
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as total FROM produk',
+    );
+
+    return Sqflite.firstIntValue(result) ?? 0;
   }
 }
